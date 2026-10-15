@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "ding-app",
+    "name": "Ding",
     "slug": "ding-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -11,6 +11,7 @@
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "package": "com.slightlyserious.ding",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -37,6 +38,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a594bba5-00c9-4c2b-8346-49d514134878"
+      }
+    },
+    "owner": "slightlyserious"
   }
 }
