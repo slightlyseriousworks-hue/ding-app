@@ -8,48 +8,30 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useNow } from '@/hooks/use-now';
-import { addDays, isSameDay, startOfDay } from '@/tasks/dates';
+import { groupTasks } from '@/tasks/grouping';
 import { useTasks } from '@/tasks/tasks-context';
-import type { Task } from '@/tasks/types';
-
-type Section = { title: string; data: Task[] };
-
-/** Splits tasks into the sections shown on the Today screen. Empty sections are left out. */
-function groupTasks(tasks: Task[], now: Date): Section[] {
-  const tomorrow = startOfDay(addDays(now, 1));
-  const byDueDate = [...tasks].sort((a, b) => a.dueAt.localeCompare(b.dueAt));
-  const open = byDueDate.filter((task) => task.completedAt === null);
-
-  const sections: Section[] = [
-    { title: 'Overdue', data: open.filter((task) => new Date(task.dueAt) < now) },
-    {
-      title: 'Today',
-      data: open.filter((task) => {
-        const due = new Date(task.dueAt);
-        return due >= now && due < tomorrow;
-      }),
-    },
-    { title: 'Upcoming', data: open.filter((task) => new Date(task.dueAt) >= tomorrow) },
-    {
-      title: 'Done today',
-      data: byDueDate.filter(
-        (task) => task.completedAt !== null && isSameDay(new Date(task.completedAt), now)
-      ),
-    },
-  ];
-
-  return sections.filter((section) => section.data.length > 0);
-}
 
 export default function TodayScreen() {
-  const { tasks, isLoaded, setCompleted } = useTasks();
+  const { tasks, loadStatus, retryLoad, setCompleted } = useTasks();
   const now = useNow();
   const sections = groupTasks(tasks, now);
+
+  if (loadStatus === 'error') {
+    return (
+      <ThemedView style={[styles.container, styles.empty]}>
+        <ThemedText type="subtitle">Couldn&apos;t load your tasks</ThemedText>
+        <ThemedText themeColor="textSecondary" style={styles.emptyText}>
+          Your saved tasks are untouched. Try again, or restart the app.
+        </ThemedText>
+        <Button label="Try again" variant="secondary" onPress={retryLoad} />
+      </ThemedView>
+    );
+  }
 
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView edges={['bottom']} style={styles.safeArea}>
-        {isLoaded && (
+        {loadStatus === 'ready' && (
           <SectionList
             sections={sections}
             keyExtractor={(task) => task.id}

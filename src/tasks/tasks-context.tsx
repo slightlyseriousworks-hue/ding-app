@@ -3,17 +3,24 @@
  *
  * Screens call `useTasks()` to read tasks and to add/edit/complete/delete them.
  * Every change is saved to the device automatically (see storage.ts).
+ *
+ * Changes are only allowed (and only saved) once the saved list has loaded successfully.
+ * If loading fails, we leave the device data alone so it can't be overwritten.
  */
-import { createContext, use, useEffect, useState, type ReactNode } from 'react';
+import { createContext, use, useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import { loadTasks, saveTasks } from '@/tasks/storage';
 import type { Task, TaskInput } from '@/tasks/types';
 
+export type LoadStatus = 'loading' | 'ready' | 'error';
+
 type TasksContextValue = {
   tasks: Task[];
-  /** False until saved tasks have been read from the device. */
-  isLoaded: boolean;
-  addTask: (input: TaskInput) => Task;
+  /** 'loading' until saved tasks have been read, then 'ready' — or 'error' if reading failed. */
+  loadStatus: LoadStatus;
+  /** Try reading saved tasks again after an error. */
+  retryLoad: () => void;
+  addTask: (input: TaskInput) => void;
   updateTask: (id: string, input: TaskInput) => void;
   setCompleted: (id: string, completed: boolean) => void;
   deleteTask: (id: string) => void;
@@ -27,22 +34,40 @@ function createId() {
 
 export function TasksProvider({ children }: { children: ReactNode }) {
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [loadStatus, setLoadStatus] = useState<LoadStatus>('loading');
 
-  // Read saved tasks once when the app starts.
-  useEffect(() => {
+  const load = useCallback(() => {
     loadTasks()
-      .then(setTasks)
-      .catch((error) => console.error('Failed to load tasks', error))
-      .finally(() => setIsLoaded(true));
+      .then((loaded) => {
+        setTasks(loaded);
+        setLoadStatus('ready');
+      })
+      .catch((error) => {
+        console.error('Failed to load tasks', error);
+        setLoadStatus('error');
+      });
   }, []);
 
-  // Save whenever the list changes (but not before the saved list has been loaded,
-  // otherwise we would overwrite it with an empty list).
+  // Read saved tasks once when the app starts.
+  useEffect(load, [load]);
+
+  function retryLoad() {
+    setLoadStatus('loading');
+    load();
+  }
+
+  // Save whenever the list changes — but only after a successful load, otherwise we
+  // would overwrite the saved list with an empty one.
   useEffect(() => {
-    if (!isLoaded) return;
+    if (loadStatus !== 'ready') return;
     saveTasks(tasks).catch((error) => console.error('Failed to save tasks', error));
-  }, [tasks, isLoaded]);
+  }, [tasks, loadStatus]);
+
+  /** Applies a change to the list, but only when it is safe to save it. */
+  function change(update: (current: Task[]) => Task[]) {
+    if (loadStatus !== 'ready') return;
+    setTasks(update);
+  }
 
   function addTask(input: TaskInput) {
     const task: Task = {
@@ -52,30 +77,33 @@ export function TasksProvider({ children }: { children: ReactNode }) {
       completedAt: null,
       createdAt: new Date().toISOString(),
     };
-    setTasks((current) => [...current, task]);
-    return task;
+    change((current) => [...current, task]);
   }
 
   function updateTask(id: string, input: TaskInput) {
-    setTasks((current) =>
-      current.map((task) => (task.id === id ? { ...task, ...input } : task))
-    );
+    change((current) => current.map((task) => (task.id === id ? { ...task, ...input } : task)));
   }
 
   function setCompleted(id: string, completed: boolean) {
     const completedAt = completed ? new Date().toISOString() : null;
-    setTasks((current) =>
-      current.map((task) => (task.id === id ? { ...task, completedAt } : task))
-    );
+    change((current) => current.map((task) => (task.id === id ? { ...task, completedAt } : task)));
   }
 
   function deleteTask(id: string) {
-    setTasks((current) => current.filter((task) => task.id !== id));
+    change((current) => current.filter((task) => task.id !== id));
   }
 
   return (
     <TasksContext
-      value={{ tasks, isLoaded, addTask, updateTask, setCompleted, deleteTask }}>
+      value={{
+        tasks,
+        loadStatus,
+        retryLoad,
+        addTask,
+        updateTask,
+        setCompleted,
+        deleteTask,
+      }}>
       {children}
     </TasksContext>
   );

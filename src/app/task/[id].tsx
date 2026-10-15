@@ -20,10 +20,10 @@ function goBack() {
 export default function TaskDetailScreen() {
   const theme = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { tasks, isLoaded, updateTask, setCompleted, deleteTask } = useTasks();
+  const { tasks, loadStatus, updateTask, setCompleted, deleteTask } = useTasks();
   const task = tasks.find((t) => t.id === id);
 
-  if (!isLoaded) {
+  if (loadStatus !== 'ready') {
     return <ThemedView style={styles.fill} />;
   }
 
