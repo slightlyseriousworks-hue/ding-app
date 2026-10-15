@@ -4,8 +4,8 @@
  * Date/time uses simple presets + steppers so it behaves the same on iOS, Android, and web
  * without extra dependencies. It can be swapped for a native picker later.
  */
-import { useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Keyboard, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
@@ -38,6 +38,7 @@ function atTime(day: Date, hours: number, minutes = 0) {
 
 export function TaskForm({ initialValue, submitLabel, onSubmit, autoFocus }: TaskFormProps) {
   const theme = useTheme();
+  const titleInputRef = useRef<TextInput>(null);
   const [title, setTitle] = useState(initialValue?.title ?? '');
   const [due, setDue] = useState(() =>
     initialValue ? new Date(initialValue.dueAt) : nextFullHour(new Date())
@@ -49,6 +50,9 @@ export function TaskForm({ initialValue, submitLabel, onSubmit, autoFocus }: Tas
 
   function handleSubmit() {
     if (!trimmedTitle) return;
+    // Hide the keyboard right away instead of waiting for the screen to close.
+    titleInputRef.current?.blur();
+    Keyboard.dismiss();
     onSubmit({ title: trimmedTitle, dueAt: due.toISOString() });
   }
 
@@ -66,6 +70,7 @@ export function TaskForm({ initialValue, submitLabel, onSubmit, autoFocus }: Tas
           Task
         </ThemedText>
         <TextInput
+          ref={titleInputRef}
           value={title}
           onChangeText={setTitle}
           placeholder="What do you need to do?"
