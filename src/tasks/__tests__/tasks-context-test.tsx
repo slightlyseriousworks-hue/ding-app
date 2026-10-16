@@ -114,6 +114,65 @@ it('syncs reminders again when Ding comes back to the foreground', async () => {
   expect(mockSyncReminders).toHaveBeenCalledWith([]);
 });
 
+describe('snooze', () => {
+  const snoozed = {
+    id: 's1',
+    title: 'Call mum',
+    dueAt: '2026-10-16T09:00:00.000Z',
+    completedAt: null,
+    snoozedUntil: '2026-10-16T09:10:00.000Z',
+    createdAt: '2026-10-15T08:00:00.000Z',
+  };
+
+  /** Shows the task's snoozedUntil and has buttons for the edits that should clear it. */
+  function SnoozeProbe() {
+    const { tasks, updateTask, setCompleted } = useTasks();
+    const task = tasks[0];
+    return (
+      <>
+        <Text>{`snoozed:${task?.snoozedUntil ?? 'none'}`}</Text>
+        <Pressable onPress={() => updateTask('s1', { title: 'Call mum!', dueAt: task.dueAt })}>
+          <Text>Rename</Text>
+        </Pressable>
+        <Pressable onPress={() => updateTask('s1', { title: task.title, dueAt: '2026-10-17T09:00:00.000Z' })}>
+          <Text>Move</Text>
+        </Pressable>
+        <Pressable onPress={() => setCompleted('s1', true)}>
+          <Text>Complete</Text>
+        </Pressable>
+      </>
+    );
+  }
+
+  async function renderSnoozed() {
+    mockedLoadTasks.mockResolvedValue([snoozed]);
+    await render(
+      <TasksProvider>
+        <SnoozeProbe />
+      </TasksProvider>
+    );
+    await screen.findByText(`snoozed:${snoozed.snoozedUntil}`);
+  }
+
+  it('keeps the snooze when only the title changes', async () => {
+    await renderSnoozed();
+    await fireEvent.press(screen.getByText('Rename'));
+    expect(screen.getByText(`snoozed:${snoozed.snoozedUntil}`)).toBeTruthy();
+  });
+
+  it('clears the snooze when the due time changes', async () => {
+    await renderSnoozed();
+    await fireEvent.press(screen.getByText('Move'));
+    await screen.findByText('snoozed:none');
+  });
+
+  it('clears the snooze when the task is completed', async () => {
+    await renderSnoozed();
+    await fireEvent.press(screen.getByText('Complete'));
+    await screen.findByText('snoozed:none');
+  });
+});
+
 it('can retry after a failed load', async () => {
   mockedLoadTasks.mockRejectedValueOnce(new Error('disk error'));
   mockedLoadTasks.mockResolvedValueOnce([]);

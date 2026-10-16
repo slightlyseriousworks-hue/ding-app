@@ -10,6 +10,7 @@ function makeTask(id: string, due: Date, completed: Date | null = null): Task {
     title: id,
     dueAt: due.toISOString(),
     completedAt: completed ? completed.toISOString() : null,
+    snoozedUntil: null,
     createdAt: new Date(2026, 9, 1).toISOString(),
   };
 }

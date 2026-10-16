@@ -20,6 +20,7 @@ const task: Task = {
   title: 'Water plants',
   dueAt: '2026-10-16T09:00:00.000Z',
   completedAt: null,
+  snoozedUntil: null,
   createdAt: '2026-10-15T08:00:00.000Z',
 };
 

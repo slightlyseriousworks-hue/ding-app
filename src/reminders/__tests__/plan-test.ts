@@ -18,6 +18,7 @@ function task(overrides: Partial<Task> = {}): Task {
     title: 'Water plants',
     dueAt: inOneHour,
     completedAt: null,
+    snoozedUntil: null,
     createdAt: '2026-10-16T10:00:00.000Z',
     ...overrides,
   };

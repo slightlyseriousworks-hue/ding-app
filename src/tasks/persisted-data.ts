@@ -7,13 +7,14 @@
  * Versions:
  *   1 — a bare JSON array of tasks (what the app saved before versioning existed).
  *   2 — { version: 2, tasks: [...] }
+ *   3 — same as 2, but every task also has `snoozedUntil` (Reminder R3).
  *
  * To change the format later: bump CURRENT_VERSION and add one step to `migrations`
  * that turns the previous version into the new one.
  */
 import type { Task } from '@/tasks/types';
 
-export const CURRENT_VERSION = 2;
+export const CURRENT_VERSION = 3;
 
 export type PersistedData = {
   version: typeof CURRENT_VERSION;
@@ -31,6 +32,12 @@ export type ParseResult =
 /** Each step turns version N into version N + 1. */
 const migrations: Record<number, (data: unknown) => unknown> = {
   1: (tasks) => ({ version: 2, tasks }),
+  // Tasks saved before snoozing existed were never snoozed.
+  2: (data) => {
+    if (!isObject(data) || !Array.isArray(data.tasks)) return data;
+    const tasks = data.tasks.map((task) => (isObject(task) ? { snoozedUntil: null, ...task } : task));
+    return { version: 3, tasks };
+  },
 };
 
 export function toPersistedData(tasks: Task[]): PersistedData {
@@ -54,7 +61,8 @@ export function isValidTask(value: unknown): value is Task {
     typeof value.title === 'string' &&
     isValidDate(value.dueAt) &&
     isValidDate(value.createdAt) &&
-    (value.completedAt === null || isValidDate(value.completedAt))
+    (value.completedAt === null || isValidDate(value.completedAt)) &&
+    (value.snoozedUntil === null || isValidDate(value.snoozedUntil))
   );
 }
 

@@ -33,6 +33,7 @@ function task(overrides: Partial<Task> = {}): Task {
     title: 'Water plants',
     dueAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
     completedAt: null,
+    snoozedUntil: null,
     createdAt: new Date().toISOString(),
     ...overrides,
   };

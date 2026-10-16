@@ -13,6 +13,12 @@ export type Task = {
   dueAt: string;
   /** When the task was marked complete, or null if it is still open. */
   completedAt: string | null;
+  /**
+   * When the user pressed Snooze on a reminder: the time it should ring again. null if not
+   * snoozed. A snooze never moves `dueAt`. It is cleared when the due time changes or the
+   * task is completed / reopened.
+   */
+  snoozedUntil: string | null;
   createdAt: string;
 };
 

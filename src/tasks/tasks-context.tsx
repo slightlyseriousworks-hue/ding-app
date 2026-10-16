@@ -97,18 +97,28 @@ export function TasksProvider({ children }: { children: ReactNode }) {
       title: input.title,
       dueAt: input.dueAt,
       completedAt: null,
+      snoozedUntil: null,
       createdAt: new Date().toISOString(),
     };
     change((current) => [...current, task]);
   }
 
   function updateTask(id: string, input: TaskInput) {
-    change((current) => current.map((task) => (task.id === id ? { ...task, ...input } : task)));
+    change((current) =>
+      current.map((task) => {
+        if (task.id !== id) return task;
+        // A new due time means a fresh reminder, so an old snooze no longer applies.
+        const snoozedUntil = input.dueAt === task.dueAt ? task.snoozedUntil : null;
+        return { ...task, ...input, snoozedUntil };
+      })
+    );
   }
 
   function setCompleted(id: string, completed: boolean) {
     const completedAt = completed ? new Date().toISOString() : null;
-    change((current) => current.map((task) => (task.id === id ? { ...task, completedAt } : task)));
+    change((current) =>
+      current.map((task) => (task.id === id ? { ...task, completedAt, snoozedUntil: null } : task))
+    );
   }
 
   function deleteTask(id: string) {
