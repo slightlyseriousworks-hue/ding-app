@@ -73,6 +73,14 @@ export function TaskForm({ initialValue, submitLabel, onSubmit, autoFocus }: Tas
     { label: 'In 1 hour', getDate: () => new Date(Date.now() + 60 * 60 * 1000) },
     { label: 'This evening', getDate: () => atTime(new Date(), 18) },
     { label: 'Tomorrow morning', getDate: () => atTime(addDays(new Date(), 1), 9) },
+    // Dev-only: short due times for testing reminders by hand. `__DEV__` is false in
+    // production builds, so these chips never ship to users.
+    ...(__DEV__
+      ? [1, 2, 5].map((minutes) => ({
+          label: `DEV +${minutes} min`,
+          getDate: () => new Date(Date.now() + minutes * 60 * 1000),
+        }))
+      : []),
   ].filter((preset) => preset.label !== 'This evening' || isBeforeEvening);
 
   return (
