@@ -4,7 +4,8 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { formatDue } from '@/tasks/dates';
+import { reminderTime } from '@/reminders/plan';
+import { formatDue, formatTimeWithSeconds } from '@/tasks/dates';
 import type { Task } from '@/tasks/types';
 
 type TaskRowProps = {
@@ -51,6 +52,13 @@ export function TaskRow({ task, now, onToggleComplete }: TaskRowProps) {
         <ThemedText type="small" style={{ color: isOverdue ? theme.danger : theme.textSecondary }}>
           {formatDue(task.dueAt, now)}
         </ThemedText>
+        {/* DEV only (temporary): the exact reminder time, to compare with when it arrives. */}
+        {__DEV__ && !isDone && (
+          <ThemedText type="small" themeColor="textSecondary">
+            {`DEV rings ${formatTimeWithSeconds(new Date(reminderTime(task)))}`}
+            {task.snoozedUntil !== null && ' (snoozed)'}
+          </ThemedText>
+        )}
       </Pressable>
     </View>
   );

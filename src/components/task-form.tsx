@@ -3,6 +3,9 @@
  *
  * Date/time uses simple presets + steppers so it behaves the same on iOS, Android, and web
  * without extra dependencies. It can be swapped for a native picker later.
+ *
+ * Due times are always whole minutes (seconds and milliseconds are 0). The form only shows
+ * hours and minutes, so hidden seconds would make a reminder seem up to a minute "late".
  */
 import { useRef, useState } from 'react';
 import { Keyboard, Pressable, StyleSheet, TextInput, View } from 'react-native';
@@ -11,7 +14,14 @@ import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { addDays, formatDay, formatTime, startOfDay } from '@/tasks/dates';
+import {
+  addDays,
+  formatDay,
+  formatTime,
+  startOfDay,
+  startOfMinute,
+  wholeMinutesFromNow,
+} from '@/tasks/dates';
 import type { TaskInput } from '@/tasks/types';
 
 const TIME_STEP_MINUTES = 15;
@@ -61,7 +71,9 @@ export function TaskForm({ initialValue, submitLabel, onSubmit, autoFocus }: Tas
     isSubmittingRef.current = true;
     setIsSubmitting(true);
     try {
-      await onSubmit({ title: trimmedTitle, dueAt: due.toISOString() });
+      // Rounded once more here, so a task saved with hidden seconds (before this rule)
+      // gets cleaned up when it is edited.
+      await onSubmit({ title: trimmedTitle, dueAt: startOfMinute(due).toISOString() });
     } finally {
       isSubmittingRef.current = false;
       setIsSubmitting(false);
@@ -70,15 +82,16 @@ export function TaskForm({ initialValue, submitLabel, onSubmit, autoFocus }: Tas
 
   // Each preset works out its time when tapped, so it is never stale.
   const presets = [
-    { label: 'In 1 hour', getDate: () => new Date(Date.now() + 60 * 60 * 1000) },
+    { label: 'In 1 hour', getDate: () => startOfMinute(new Date(Date.now() + 60 * 60 * 1000)) },
     { label: 'This evening', getDate: () => atTime(new Date(), 18) },
     { label: 'Tomorrow morning', getDate: () => atTime(addDays(new Date(), 1), 9) },
     // Dev-only: short due times for testing reminders by hand. `__DEV__` is false in
-    // production builds, so these chips never ship to users.
+    // production builds, so these chips never ship to users. "+1 min" means the first whole
+    // minute at least 1 minute away (11:08:20 → 11:10:00), so timing tests start clean.
     ...(__DEV__
       ? [1, 2, 5].map((minutes) => ({
           label: `DEV +${minutes} min`,
-          getDate: () => new Date(Date.now() + minutes * 60 * 1000),
+          getDate: () => wholeMinutesFromNow(minutes),
         }))
       : []),
   ].filter((preset) => preset.label !== 'This evening' || isBeforeEvening);
