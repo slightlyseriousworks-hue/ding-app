@@ -3,6 +3,7 @@
  * so on web these do nothing. Expo picks this file automatically when running on web.
  */
 
+import type { ReminderPress } from '@/reminders/actions';
 import type { PermissionResult } from '@/reminders/notifications';
 import type { ReminderTiming, ReminderToSchedule, ScheduledReminder } from '@/reminders/plan';
 
@@ -43,3 +44,21 @@ export async function getScheduledTaskReminders(): Promise<ScheduledReminder[]> 
 export async function cancelReminder(_id: string) {}
 
 export async function scheduleTaskReminder(_reminder: ReminderToSchedule) {}
+
+export function toReminderPress(_response: unknown): ReminderPress | null {
+  return null;
+}
+
+export function addReminderPressListener(_listener: (press: ReminderPress) => void) {
+  return () => {};
+}
+
+export function getLastReminderPress(): ReminderPress | null {
+  return null;
+}
+
+export function clearLastReminderPress() {}
+
+export async function dismissReminder(_notificationId: string) {}
+
+export async function registerBackgroundPressTask(_taskName: string) {}

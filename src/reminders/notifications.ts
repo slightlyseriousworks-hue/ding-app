@@ -3,7 +3,9 @@ import { Platform } from 'react-native';
 
 import {
   DONE_ACTION_ID,
+  OPEN_ACTION_ID,
   REMINDER_CATEGORY_ID,
+  type ReminderPress,
   SNOOZE_ACTION_ID,
   SNOOZE_MINUTES,
 } from '@/reminders/actions';
@@ -194,4 +196,75 @@ export async function scheduleTaskReminder(reminder: ReminderToSchedule) {
       channelId: REMINDERS_CHANNEL_ID,
     },
   });
+}
+
+// --- Presses on a notification (Done, Snooze, or tapping it) ---
+
+function readObject(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null;
+}
+
+/** The data saved in a notification. Background tasks get it as a JSON string instead. */
+function readData(content: Record<string, unknown> | null) {
+  const data = readObject(content?.data);
+  if (data) return data;
+  try {
+    return typeof content?.dataString === 'string' ? readObject(JSON.parse(content.dataString)) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Turns what expo-notifications reports about a press into a ReminderPress, or null if it is
+ * unreadable. Accepts `unknown` because background tasks get a raw, unchecked payload.
+ */
+export function toReminderPress(response: unknown): ReminderPress | null {
+  const actionIdentifier = readString(readObject(response)?.actionIdentifier);
+  const notification = readObject(readObject(response)?.notification);
+  const request = readObject(notification?.request);
+  const notificationId = readString(request?.identifier);
+  if (!actionIdentifier || !notificationId) return null;
+
+  const actionId =
+    actionIdentifier === Notifications.DEFAULT_ACTION_IDENTIFIER ? OPEN_ACTION_ID : actionIdentifier;
+  const date = notification?.date;
+  return {
+    actionId,
+    notificationId,
+    remindAt: readString(readData(readObject(request?.content))?.remindAt),
+    key: `${notificationId}|${String(date)}|${actionId}`,
+  };
+}
+
+/** Calls `listener` for every press while Ding's JS is running. Returns an unsubscribe. */
+export function addReminderPressListener(listener: (press: ReminderPress) => void) {
+  const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+    const press = toReminderPress(response);
+    if (press) listener(press);
+  });
+  return () => subscription.remove();
+}
+
+/** The press that opened Ding (e.g. tapping a notification while Ding was closed), if any. */
+export function getLastReminderPress() {
+  return toReminderPress(Notifications.getLastNotificationResponse());
+}
+
+/** Forgets the last press, so it isn't handled again the next time Ding asks. */
+export function clearLastReminderPress() {
+  Notifications.clearLastNotificationResponse();
+}
+
+/** Removes a notification from the notification shade. Buttons don't do this by themselves. */
+export async function dismissReminder(notificationId: string) {
+  await Notifications.dismissNotificationAsync(notificationId);
+}
+
+/**
+ * Tells expo-notifications to run the TaskManager task `taskName` when a button is pressed
+ * while Ding is in the background or closed (Android). See background-task.ts.
+ */
+export async function registerBackgroundPressTask(taskName: string) {
+  await Notifications.registerTaskAsync(taskName);
 }

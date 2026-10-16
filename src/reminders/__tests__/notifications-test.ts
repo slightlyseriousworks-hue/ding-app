@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 
 import {
   DONE_ACTION_ID,
+  OPEN_ACTION_ID,
   REMINDER_CATEGORY_ID,
   SNOOZE_ACTION_ID,
   SNOOZE_MINUTES,
@@ -16,6 +17,7 @@ import {
   requestNotificationPermission,
   scheduleTaskReminder,
   scheduleTestNotification,
+  toReminderPress,
 } from '@/reminders/notifications';
 
 import { ExactAlarm } from '../../../modules/exact-alarm';
@@ -30,6 +32,7 @@ jest.mock('../../../modules/exact-alarm', () => ({
 const mockedExactAlarm = jest.mocked(ExactAlarm!);
 
 jest.mock('expo-notifications', () => ({
+  DEFAULT_ACTION_IDENTIFIER: 'expo.modules.notifications.actions.DEFAULT',
   AndroidImportance: { HIGH: 6 },
   SchedulableTriggerInputTypes: { TIME_INTERVAL: 'timeInterval', DATE: 'date' },
   setNotificationHandler: jest.fn(),
@@ -174,6 +177,45 @@ describe('getScheduledTaskReminders', () => {
       // Scheduled before R3: only `dueAt` was saved, and there are no buttons.
       { id: 'task-c', remindAt: 'D', title: 'T', timing: null, hasActions: false },
     ]);
+  });
+});
+
+describe('toReminderPress', () => {
+  const remindAt = '2026-10-16T13:00:00.000Z';
+
+  function response(actionIdentifier: string, content: Record<string, unknown>) {
+    return { actionIdentifier, notification: { date: 123, request: { identifier: 'task-a', content } } };
+  }
+
+  it('reads a press reported to a listener (data already parsed)', () => {
+    expect(toReminderPress(response('done', { data: { taskId: 'a', remindAt } }))).toEqual({
+      actionId: 'done',
+      notificationId: 'task-a',
+      remindAt,
+      key: 'task-a|123|done',
+    });
+  });
+
+  it('reads a press given to the background task (data as a JSON string)', () => {
+    const content = { dataString: JSON.stringify({ taskId: 'a', remindAt }) };
+    expect(toReminderPress(response('snooze', content))).toEqual(
+      expect.objectContaining({ actionId: 'snooze', notificationId: 'task-a', remindAt })
+    );
+  });
+
+  it('reports a tap on the notification itself as "open"', () => {
+    const tap = response(Notifications.DEFAULT_ACTION_IDENTIFIER, { data: {} });
+    expect(toReminderPress(tap)).toEqual(
+      expect.objectContaining({ actionId: OPEN_ACTION_ID, remindAt: null })
+    );
+  });
+
+  it('survives broken payloads', () => {
+    expect(toReminderPress(null)).toBeNull();
+    expect(toReminderPress({ actionIdentifier: 'done' })).toBeNull();
+    expect(toReminderPress(response('done', { dataString: '{not json' }))).toEqual(
+      expect.objectContaining({ remindAt: null })
+    );
   });
 });
 

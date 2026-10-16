@@ -3,6 +3,7 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { HeaderLink } from '@/components/header-link';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { configureNotifications } from '@/reminders/notifications';
+import { useOpenTaskFromReminder } from '@/reminders/reminder-responses';
 import { TasksProvider } from '@/tasks/tasks-context';
 
 // Lets notifications show while the app is open. Does not ask for permission.
@@ -10,6 +11,8 @@ configureNotifications();
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  // Tapping a task reminder opens that task.
+  useOpenTaskFromReminder();
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>

@@ -8,9 +8,19 @@
  * Changes are only allowed (and only saved) once the saved list has loaded successfully.
  * If loading fails, we leave the device data alone so it can't be overwritten.
  */
-import { createContext, use, useCallback, useEffect, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  use,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { AppState } from 'react-native';
 
+import { applyReminderAction } from '@/reminders/actions';
+import { useReminderButtons } from '@/reminders/reminder-responses';
 import { createReminderSync } from '@/reminders/sync';
 import { loadTasks, saveTasks } from '@/tasks/storage';
 import type { Task, TaskInput } from '@/tasks/types';
@@ -74,13 +84,27 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     syncReminders(tasks);
   }, [tasks, loadStatus, syncReminders]);
 
-  // Sync again each time Ding comes back to the foreground. The user may have turned
-  // Android's "Alarms & reminders" on or off meanwhile, and every reminder should switch to
-  // the new timing. (Turning it off also makes Android cancel Ding's exact alarms.)
+  // Each time Ding comes back to the foreground, re-read the saved tasks: a reminder button
+  // pressed while Ding was in the background changed them directly (see
+  // reminders/reminder-responses.ts). The re-read list is then saved and synced as usual.
+  // Syncing also matters on its own: the user may have turned Android's "Alarms & reminders"
+  // on or off meanwhile, and every reminder should switch to the new timing.
+  const localChangeCount = useRef(0);
   useEffect(() => {
     if (loadStatus !== 'ready') return;
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') syncReminders(tasks);
+      if (state !== 'active') return;
+      const countBefore = localChangeCount.current;
+      loadTasks()
+        .then((saved) => {
+          // The user changed something while we were reading. That is newer; keep it.
+          if (localChangeCount.current !== countBefore) return;
+          setTasks(saved);
+        })
+        .catch((error) => {
+          console.error('Failed to re-read tasks', error);
+          syncReminders(tasks);
+        });
     });
     return () => subscription.remove();
   }, [tasks, loadStatus, syncReminders]);
@@ -88,8 +112,15 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   /** Applies a change to the list, but only when it is safe to save it. */
   function change(update: (current: Task[]) => Task[]) {
     if (loadStatus !== 'ready') return;
+    localChangeCount.current += 1;
     setTasks(update);
   }
+
+  // Done / Snooze pressed on a reminder while Ding is on screen. (While Ding is in the
+  // background or closed, reminders/background-task.ts handles the press instead.)
+  useReminderButtons(loadStatus === 'ready', (action) => {
+    change((current) => applyReminderAction(current, action, new Date()) ?? current);
+  });
 
   function addTask(input: TaskInput) {
     const task: Task = {
