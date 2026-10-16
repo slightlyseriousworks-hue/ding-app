@@ -1,7 +1,9 @@
 /**
  * Keeps the phone's scheduled reminders in step with the task list.
  *
- * TasksProvider calls the sync function every time the tasks change. Screens never call it.
+ * TasksProvider calls the sync function every time the tasks change, and whenever Ding comes
+ * back to the foreground (the user may have turned precise timing on or off in Android
+ * Settings meanwhile). Screens never call it.
  * Only one sync runs at a time; if the tasks change while one is running, one more sync runs
  * afterwards with the newest list (any lists in between are skipped, they are already stale).
  *
@@ -11,6 +13,7 @@
 import {
   cancelReminder,
   ensureAndroidChannel,
+  getReminderTiming,
   getScheduledTaskReminders,
   hasNotificationPermission,
   scheduleTaskReminder,
@@ -20,7 +23,13 @@ import type { Task } from '@/tasks/types';
 
 async function syncOnce(tasks: Task[], seenTaskIds: ReadonlySet<string>) {
   const scheduled = await getScheduledTaskReminders();
-  const changes = planReminderChanges({ tasks, scheduled, seenTaskIds, now: new Date() });
+  const changes = planReminderChanges({
+    tasks,
+    scheduled,
+    seenTaskIds,
+    timing: getReminderTiming(),
+    now: new Date(),
+  });
 
   // Cancel first, so an out-of-date reminder is gone before its replacement is scheduled.
   for (const id of changes.cancel) {

@@ -1,5 +1,6 @@
 import {
   cancelReminder,
+  getReminderTiming,
   getScheduledTaskReminders,
   hasNotificationPermission,
   scheduleTaskReminder,
@@ -11,12 +12,14 @@ import type { Task } from '@/tasks/types';
 jest.mock('@/reminders/notifications', () => ({
   cancelReminder: jest.fn(async () => {}),
   ensureAndroidChannel: jest.fn(async () => {}),
+  getReminderTiming: jest.fn(),
   getScheduledTaskReminders: jest.fn(),
   hasNotificationPermission: jest.fn(),
   scheduleTaskReminder: jest.fn(async () => {}),
 }));
 
 const mockedCancel = jest.mocked(cancelReminder);
+const mockedGetTiming = jest.mocked(getReminderTiming);
 const mockedGetScheduled = jest.mocked(getScheduledTaskReminders);
 const mockedHasPermission = jest.mocked(hasNotificationPermission);
 const mockedSchedule = jest.mocked(scheduleTaskReminder);
@@ -40,12 +43,13 @@ beforeEach(() => {
   jest.spyOn(console, 'error').mockImplementation(() => {});
   device = new Map();
   mockedHasPermission.mockResolvedValue(true);
+  mockedGetTiming.mockReturnValue('exact');
   mockedGetScheduled.mockImplementation(async () => [...device.values()]);
   mockedCancel.mockImplementation(async (id) => {
     device.delete(id);
   });
-  mockedSchedule.mockImplementation(async (reminder) => {
-    device.set(reminder.id, { id: reminder.id, dueAt: reminder.dueAt, title: reminder.title });
+  mockedSchedule.mockImplementation(async ({ id, dueAt, title, timing }) => {
+    device.set(id, { id, dueAt, title, timing });
   });
 });
 
@@ -89,7 +93,7 @@ it('cancels when a task is deleted', async () => {
 });
 
 it('does not cancel reminders of tasks it has never seen (corrupt-data recovery)', async () => {
-  device.set('task-lost', { id: 'task-lost', dueAt: task().dueAt, title: 'Lost' });
+  device.set('task-lost', { id: 'task-lost', dueAt: task().dueAt, title: 'Lost', timing: 'exact' });
   const sync = createReminderSync();
   await sync([]);
 
@@ -98,13 +102,34 @@ it('does not cancel reminders of tasks it has never seen (corrupt-data recovery)
 });
 
 it('schedules nothing without permission, but still cancels', async () => {
-  device.set('task-a', { id: 'task-a', dueAt: task().dueAt, title: 'Water plants' });
+  device.set('task-a', {
+    id: 'task-a',
+    dueAt: task().dueAt,
+    title: 'Water plants',
+    timing: 'exact',
+  });
   mockedHasPermission.mockResolvedValue(false);
   const sync = createReminderSync();
   await sync([task({ completedAt: new Date().toISOString() }), task({ id: 'b' })]);
 
   expect(mockedCancel).toHaveBeenCalledWith('task-a');
   expect(mockedSchedule).not.toHaveBeenCalled();
+});
+
+it('reschedules every reminder when the timing changes, and only then', async () => {
+  const sync = createReminderSync();
+  const tasks = [task({ id: 'a' }), task({ id: 'b' })];
+  mockedGetTiming.mockReturnValue('best-effort');
+  await sync(tasks);
+
+  // The user turns on "Alarms & reminders" and comes back to Ding.
+  mockedGetTiming.mockReturnValue('exact');
+  await sync(tasks);
+  await sync(tasks);
+
+  expect(mockedCancel).toHaveBeenCalledTimes(2);
+  expect(mockedSchedule).toHaveBeenCalledTimes(4);
+  expect([...device.values()].map((r) => r.timing)).toEqual(['exact', 'exact']);
 });
 
 it('runs one sync at a time and finishes with the newest list', async () => {

@@ -3,13 +3,17 @@ import { Platform } from 'react-native';
 
 import {
   REMINDER_ID_PREFIX,
+  type ReminderTiming,
   type ReminderToSchedule,
   type ScheduledReminder,
 } from '@/reminders/plan';
 
+import { ExactAlarm } from '../../modules/exact-alarm';
+
 /**
  * The ONLY file that talks to expo-notifications (web uses notifications.web.ts instead).
  * Screens call these small functions and never import expo-notifications directly.
+ * It is also the only file that uses the temporary exact-alarm module.
  */
 
 export type PermissionResult = 'granted' | 'denied' | 'unavailable';
@@ -89,8 +93,34 @@ export async function hasNotificationPermission() {
   return current.granted;
 }
 
+/**
+ * Whether reminders scheduled now will arrive on time. Never shows a prompt.
+ *
+ * Only Android has a switch for this ("Alarms & reminders"). When it is on, expo-notifications
+ * schedules exact alarms by itself; when it is off, it falls back to alarms Android may delay.
+ */
+export function getReminderTiming(): ReminderTiming {
+  if (Platform.OS !== 'android') return 'exact';
+  // No native module means an older build without the exact-alarm permission.
+  if (!ExactAlarm) return 'best-effort';
+  return ExactAlarm.canScheduleExactAlarms() ? 'exact' : 'best-effort';
+}
+
+/**
+ * Opens Ding's "Alarms & reminders" page in Android Settings, where the user can turn on
+ * precise timing. Returns false if there was nothing to open.
+ */
+export function openExactTimingSettings(): boolean {
+  if (Platform.OS !== 'android' || !ExactAlarm) return false;
+  return ExactAlarm.openExactAlarmSettings();
+}
+
 function readString(value: unknown) {
   return typeof value === 'string' ? value : null;
+}
+
+function readTiming(value: unknown): ReminderTiming | null {
+  return value === 'exact' || value === 'best-effort' ? value : null;
 }
 
 /** Lists the task reminders scheduled on this device (ignores other notifications). */
@@ -102,6 +132,7 @@ export async function getScheduledTaskReminders(): Promise<ScheduledReminder[]> 
       id: request.identifier,
       dueAt: readString(request.content.data?.dueAt),
       title: readString(request.content.data?.title),
+      timing: readTiming(request.content.data?.timing),
     }));
 }
 
@@ -110,8 +141,8 @@ export async function cancelReminder(id: string) {
 }
 
 /**
- * Schedules one reminder at the task's due time. The due time and title are saved inside
- * the notification so sync can tell later whether it is still up to date.
+ * Schedules one reminder at the task's due time. The due time, title, and timing are saved
+ * inside the notification so sync can tell later whether it is still up to date.
  * Call ensureAndroidChannel() first.
  */
 export async function scheduleTaskReminder(reminder: ReminderToSchedule) {
@@ -121,7 +152,12 @@ export async function scheduleTaskReminder(reminder: ReminderToSchedule) {
       title: reminder.title,
       body: 'Ding! This is due now.',
       sound: true,
-      data: { taskId: reminder.taskId, dueAt: reminder.dueAt, title: reminder.title },
+      data: {
+        taskId: reminder.taskId,
+        dueAt: reminder.dueAt,
+        title: reminder.title,
+        timing: reminder.timing,
+      },
     },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.DATE,

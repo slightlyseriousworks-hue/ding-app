@@ -9,6 +9,7 @@
  * If loading fails, we leave the device data alone so it can't be overwritten.
  */
 import { createContext, use, useCallback, useEffect, useState, type ReactNode } from 'react';
+import { AppState } from 'react-native';
 
 import { createReminderSync } from '@/reminders/sync';
 import { loadTasks, saveTasks } from '@/tasks/storage';
@@ -71,6 +72,17 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (loadStatus !== 'ready') return;
     syncReminders(tasks);
+  }, [tasks, loadStatus, syncReminders]);
+
+  // Sync again each time Ding comes back to the foreground. The user may have turned
+  // Android's "Alarms & reminders" on or off meanwhile, and every reminder should switch to
+  // the new timing. (Turning it off also makes Android cancel Ding's exact alarms.)
+  useEffect(() => {
+    if (loadStatus !== 'ready') return;
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') syncReminders(tasks);
+    });
+    return () => subscription.remove();
   }, [tasks, loadStatus, syncReminders]);
 
   /** Applies a change to the list, but only when it is safe to save it. */

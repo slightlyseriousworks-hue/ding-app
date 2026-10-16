@@ -4,7 +4,7 @@
  */
 
 import type { PermissionResult } from '@/reminders/notifications';
-import type { ReminderToSchedule, ScheduledReminder } from '@/reminders/plan';
+import type { ReminderTiming, ReminderToSchedule, ScheduledReminder } from '@/reminders/plan';
 
 export type { PermissionResult };
 
@@ -23,6 +23,14 @@ export async function scheduleTestNotification(_seconds: number): Promise<string
 }
 
 export async function hasNotificationPermission() {
+  return false;
+}
+
+export function getReminderTiming(): ReminderTiming {
+  return 'exact';
+}
+
+export function openExactTimingSettings() {
   return false;
 }
 

@@ -2,6 +2,7 @@ import {
   MIN_LEAD_MS,
   planReminderChanges,
   reminderId,
+  type ReminderTiming,
   type ScheduledReminder,
 } from '@/reminders/plan';
 import type { Task } from '@/tasks/types';
@@ -23,19 +24,64 @@ function task(overrides: Partial<Task> = {}): Task {
 }
 
 /** A reminder exactly as it would be scheduled for `t`. */
-function scheduledFor(t: Task): ScheduledReminder {
-  return { id: reminderId(t.id), dueAt: t.dueAt, title: t.title };
+function scheduledFor(t: Task, timing: ReminderTiming = 'exact'): ScheduledReminder {
+  return { id: reminderId(t.id), dueAt: t.dueAt, title: t.title, timing };
 }
 
-function plan(tasks: Task[], scheduled: ScheduledReminder[] = [], seen = tasks.map((t) => t.id)) {
-  return planReminderChanges({ tasks, scheduled, seenTaskIds: new Set(seen), now });
+/** Plans with exact timing available, unless `timing` says otherwise. */
+function plan(
+  tasks: Task[],
+  scheduled: ScheduledReminder[] = [],
+  seen = tasks.map((t) => t.id),
+  timing: ReminderTiming = 'exact'
+) {
+  return planReminderChanges({ tasks, scheduled, seenTaskIds: new Set(seen), timing, now });
 }
 
 it('schedules one reminder for an open future task, at its due time', () => {
   expect(plan([task()])).toEqual({
     cancel: [],
-    schedule: [{ id: 'task-a', taskId: 'a', title: 'Water plants', dueAt: inOneHour }],
+    schedule: [
+      { id: 'task-a', taskId: 'a', title: 'Water plants', dueAt: inOneHour, timing: 'exact' },
+    ],
   });
+});
+
+it('schedules with best-effort timing when exact timing is unavailable', () => {
+  const t = task();
+  expect(plan([t], [], ['a'], 'best-effort').schedule).toEqual([
+    expect.objectContaining({ id: 'task-a', timing: 'best-effort' }),
+  ]);
+});
+
+it('replaces a best-effort reminder once exact timing is turned on', () => {
+  const t = task();
+  expect(plan([t], [scheduledFor(t, 'best-effort')])).toEqual({
+    cancel: ['task-a'],
+    schedule: [expect.objectContaining({ id: 'task-a', timing: 'exact' })],
+  });
+});
+
+it('replaces an exact reminder when exact timing is turned off (Android cancels those)', () => {
+  const t = task();
+  expect(plan([t], [scheduledFor(t, 'exact')], ['a'], 'best-effort')).toEqual({
+    cancel: ['task-a'],
+    schedule: [expect.objectContaining({ id: 'task-a', timing: 'best-effort' })],
+  });
+});
+
+it('replaces a reminder scheduled before timing was recorded (R2 builds)', () => {
+  const t = task();
+  const fromR2 = { ...scheduledFor(t), timing: null };
+  expect(plan([t], [fromR2])).toEqual({
+    cancel: ['task-a'],
+    schedule: [expect.objectContaining({ timing: 'exact' })],
+  });
+});
+
+it('keeps a reminder with old timing if it is due too soon to replace safely', () => {
+  const t = task({ dueAt: new Date(now.getTime() + MIN_LEAD_MS - 1).toISOString() });
+  expect(plan([t], [scheduledFor(t, 'best-effort')])).toEqual({ cancel: [], schedule: [] });
 });
 
 it('does nothing when the reminder is already up to date (no duplicates)', () => {
@@ -103,13 +149,13 @@ it('leaves reminders for never-seen tasks alone (e.g. after recovering corrupt d
 });
 
 it('ignores notifications that are not task reminders (e.g. the Settings test)', () => {
-  const test = { id: 'some-random-id', dueAt: null, title: null };
+  const test = { id: 'some-random-id', dueAt: null, title: null, timing: null };
   expect(plan([], [test], ['some-random-id'])).toEqual({ cancel: [], schedule: [] });
 });
 
 it('replaces a reminder whose saved details could not be read', () => {
   const t = task();
-  const unreadable = { id: 'task-a', dueAt: null, title: null };
+  const unreadable = { id: 'task-a', dueAt: null, title: null, timing: null };
   expect(plan([t], [unreadable])).toEqual({
     cancel: ['task-a'],
     schedule: [expect.objectContaining({ id: 'task-a' })],

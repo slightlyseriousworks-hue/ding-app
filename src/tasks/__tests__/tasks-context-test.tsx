@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Pressable, Text } from 'react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { AppState, Pressable, Text, type AppStateStatus } from 'react-native';
 
 import { loadTasks, saveTasks } from '@/tasks/storage';
 import { TasksProvider, useTasks } from '@/tasks/tasks-context';
@@ -93,6 +93,25 @@ it('syncs reminders after loading and after every change', async () => {
   await waitFor(() =>
     expect(mockSyncReminders).toHaveBeenLastCalledWith([expect.objectContaining(newTask)])
   );
+});
+
+it('syncs reminders again when Ding comes back to the foreground', async () => {
+  const listeners: ((state: AppStateStatus) => void)[] = [];
+  jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, listener) => {
+    listeners.push(listener);
+    return { remove: jest.fn() };
+  });
+  mockedLoadTasks.mockResolvedValue([]);
+  await renderProvider();
+  await screen.findByText('ready:0');
+  await waitFor(() => expect(listeners.length).toBeGreaterThan(0));
+  mockSyncReminders.mockClear();
+
+  await act(() => listeners.at(-1)?.('background'));
+  expect(mockSyncReminders).not.toHaveBeenCalled();
+
+  await act(() => listeners.at(-1)?.('active'));
+  expect(mockSyncReminders).toHaveBeenCalledWith([]);
 });
 
 it('can retry after a failed load', async () => {
