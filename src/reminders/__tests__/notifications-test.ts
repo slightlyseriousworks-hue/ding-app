@@ -2,6 +2,13 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
 import {
+  DONE_ACTION_ID,
+  REMINDER_CATEGORY_ID,
+  SNOOZE_ACTION_ID,
+  SNOOZE_MINUTES,
+} from '@/reminders/actions';
+import {
+  ensureReminderActions,
   getReminderTiming,
   getScheduledTaskReminders,
   openExactTimingSettings,
@@ -27,6 +34,7 @@ jest.mock('expo-notifications', () => ({
   SchedulableTriggerInputTypes: { TIME_INTERVAL: 'timeInterval', DATE: 'date' },
   setNotificationHandler: jest.fn(),
   setNotificationChannelAsync: jest.fn(async () => null),
+  setNotificationCategoryAsync: jest.fn(async () => null),
   getPermissionsAsync: jest.fn(),
   requestPermissionsAsync: jest.fn(),
   scheduleNotificationAsync: jest.fn(async () => 'notification-id'),
@@ -101,14 +109,33 @@ describe('scheduleTestNotification', () => {
   });
 });
 
+describe('ensureReminderActions', () => {
+  it('sets up Done and Snooze buttons that do not open the app', async () => {
+    await ensureReminderActions();
+
+    expect(mocked.setNotificationCategoryAsync).toHaveBeenCalledWith(REMINDER_CATEGORY_ID, [
+      expect.objectContaining({
+        identifier: DONE_ACTION_ID,
+        buttonTitle: 'Done',
+        options: { opensAppToForeground: false },
+      }),
+      expect.objectContaining({
+        identifier: SNOOZE_ACTION_ID,
+        buttonTitle: `Snooze ${SNOOZE_MINUTES} min`,
+        options: { opensAppToForeground: false },
+      }),
+    ]);
+  });
+});
+
 describe('scheduleTaskReminder', () => {
-  it('schedules at the due time with the task-derived id and details', async () => {
-    const dueAt = '2026-10-16T13:00:00.000Z';
+  it('schedules at the reminder time with the task-derived id, details, and buttons', async () => {
+    const remindAt = '2026-10-16T13:00:00.000Z';
     await scheduleTaskReminder({
       id: 'task-a',
       taskId: 'a',
       title: 'Water plants',
-      dueAt,
+      remindAt,
       timing: 'exact',
     });
 
@@ -116,11 +143,12 @@ describe('scheduleTaskReminder', () => {
       identifier: 'task-a',
       content: expect.objectContaining({
         title: 'Water plants',
-        data: { taskId: 'a', dueAt, title: 'Water plants', timing: 'exact' },
+        categoryIdentifier: REMINDER_CATEGORY_ID,
+        data: { taskId: 'a', remindAt, title: 'Water plants', timing: 'exact' },
       }),
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
-        date: new Date(dueAt),
+        date: new Date(remindAt),
         channelId: REMINDERS_CHANNEL_ID,
       },
     });
@@ -129,17 +157,22 @@ describe('scheduleTaskReminder', () => {
 
 describe('getScheduledTaskReminders', () => {
   it('returns only task reminders, with their saved details', async () => {
+    const withActions = { categoryIdentifier: REMINDER_CATEGORY_ID };
     mocked.getAllScheduledNotificationsAsync.mockResolvedValue([
-      { identifier: 'task-a', content: { data: { dueAt: 'D', title: 'T', timing: 'exact' } } },
+      {
+        identifier: 'task-a',
+        content: { ...withActions, data: { remindAt: 'R', title: 'T', timing: 'exact' } },
+      },
       { identifier: 'task-b', content: { data: null } },
       { identifier: 'task-c', content: { data: { dueAt: 'D', title: 'T', timing: 'nope' } } },
       { identifier: 'r1-test', content: { data: {} } },
     ] as unknown as Notifications.NotificationRequest[]);
 
     await expect(getScheduledTaskReminders()).resolves.toEqual([
-      { id: 'task-a', dueAt: 'D', title: 'T', timing: 'exact' },
-      { id: 'task-b', dueAt: null, title: null, timing: null },
-      { id: 'task-c', dueAt: 'D', title: 'T', timing: null },
+      { id: 'task-a', remindAt: 'R', title: 'T', timing: 'exact', hasActions: true },
+      { id: 'task-b', remindAt: null, title: null, timing: null, hasActions: false },
+      // Scheduled before R3: only `dueAt` was saved, and there are no buttons.
+      { id: 'task-c', remindAt: 'D', title: 'T', timing: null, hasActions: false },
     ]);
   });
 });

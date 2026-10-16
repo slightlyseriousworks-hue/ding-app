@@ -2,6 +2,7 @@ import {
   MIN_LEAD_MS,
   planReminderChanges,
   reminderId,
+  reminderTime,
   type ReminderTiming,
   type ScheduledReminder,
 } from '@/reminders/plan';
@@ -26,7 +27,7 @@ function task(overrides: Partial<Task> = {}): Task {
 
 /** A reminder exactly as it would be scheduled for `t`. */
 function scheduledFor(t: Task, timing: ReminderTiming = 'exact'): ScheduledReminder {
-  return { id: reminderId(t.id), dueAt: t.dueAt, title: t.title, timing };
+  return { id: reminderId(t.id), remindAt: reminderTime(t), title: t.title, timing, hasActions: true };
 }
 
 /** Plans with exact timing available, unless `timing` says otherwise. */
@@ -43,7 +44,7 @@ it('schedules one reminder for an open future task, at its due time', () => {
   expect(plan([task()])).toEqual({
     cancel: [],
     schedule: [
-      { id: 'task-a', taskId: 'a', title: 'Water plants', dueAt: inOneHour, timing: 'exact' },
+      { id: 'task-a', taskId: 'a', title: 'Water plants', remindAt: inOneHour, timing: 'exact' },
     ],
   });
 });
@@ -104,7 +105,7 @@ it('cancels then reschedules (same id) when the due time changes', () => {
   const edited = task({ dueAt: inTwoHours });
   expect(plan([edited], [scheduledFor(old)])).toEqual({
     cancel: ['task-a'],
-    schedule: [expect.objectContaining({ id: 'task-a', dueAt: inTwoHours })],
+    schedule: [expect.objectContaining({ id: 'task-a', remindAt: inTwoHours })],
   });
 });
 
@@ -150,16 +151,69 @@ it('leaves reminders for never-seen tasks alone (e.g. after recovering corrupt d
 });
 
 it('ignores notifications that are not task reminders (e.g. the Settings test)', () => {
-  const test = { id: 'some-random-id', dueAt: null, title: null, timing: null };
+  const test = { id: 'some-random-id', remindAt: null, title: null, timing: null, hasActions: false };
   expect(plan([], [test], ['some-random-id'])).toEqual({ cancel: [], schedule: [] });
 });
 
 it('replaces a reminder whose saved details could not be read', () => {
   const t = task();
-  const unreadable = { id: 'task-a', dueAt: null, title: null, timing: null };
+  const unreadable = { id: 'task-a', remindAt: null, title: null, timing: null, hasActions: false };
   expect(plan([t], [unreadable])).toEqual({
     cancel: ['task-a'],
     schedule: [expect.objectContaining({ id: 'task-a' })],
+  });
+});
+
+describe('snooze', () => {
+  const inTenMinutes = '2026-10-16T12:10:00.000Z';
+
+  it('rings a snoozed task at the snooze time, even when it is already overdue', () => {
+    const t = task({ dueAt: oneHourAgo, snoozedUntil: inTenMinutes });
+    expect(plan([t]).schedule).toEqual([
+      expect.objectContaining({ id: 'task-a', remindAt: inTenMinutes }),
+    ]);
+  });
+
+  it('replaces the old reminder (same id, so never two) when a task is snoozed', () => {
+    const before = task();
+    const snoozed = task({ snoozedUntil: inTenMinutes });
+    expect(plan([snoozed], [scheduledFor(before)])).toEqual({
+      cancel: ['task-a'],
+      schedule: [expect.objectContaining({ id: 'task-a', remindAt: inTenMinutes })],
+    });
+  });
+
+  it('keeps an up-to-date snooze reminder', () => {
+    const t = task({ snoozedUntil: inTenMinutes });
+    expect(plan([t], [scheduledFor(t)])).toEqual({ cancel: [], schedule: [] });
+  });
+
+  it('cancels a pending snooze reminder when the task is completed', () => {
+    const t = task({ snoozedUntil: inTenMinutes });
+    const done = task({ completedAt: now.toISOString(), snoozedUntil: null });
+    expect(plan([done], [scheduledFor(t)])).toEqual({ cancel: ['task-a'], schedule: [] });
+  });
+
+  it('does not schedule a snooze time that has already passed', () => {
+    const t = task({ dueAt: oneHourAgo, snoozedUntil: oneHourAgo });
+    expect(plan([t]).schedule).toEqual([]);
+  });
+});
+
+describe('reminders from before R3 (no Done / Snooze buttons)', () => {
+  it('replaces them so they get the buttons', () => {
+    const t = task();
+    const fromR2 = { ...scheduledFor(t), hasActions: false };
+    expect(plan([t], [fromR2])).toEqual({
+      cancel: ['task-a'],
+      schedule: [expect.objectContaining({ id: 'task-a', remindAt: t.dueAt })],
+    });
+  });
+
+  it('keeps one that is due too soon to replace safely', () => {
+    const t = task({ dueAt: new Date(now.getTime() + MIN_LEAD_MS - 1).toISOString() });
+    const fromR2 = { ...scheduledFor(t), hasActions: false };
+    expect(plan([t], [fromR2])).toEqual({ cancel: [], schedule: [] });
   });
 });
 

@@ -14,6 +14,8 @@ export function configureNotifications() {}
 
 export async function ensureAndroidChannel() {}
 
+export async function ensureReminderActions() {}
+
 export async function requestNotificationPermission(): Promise<PermissionResult> {
   return 'unavailable';
 }

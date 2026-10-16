@@ -13,6 +13,7 @@
 import {
   cancelReminder,
   ensureAndroidChannel,
+  ensureReminderActions,
   getReminderTiming,
   getScheduledTaskReminders,
   hasNotificationPermission,
@@ -41,6 +42,7 @@ async function syncOnce(tasks: Task[], seenTaskIds: ReadonlySet<string>) {
   if (!(await hasNotificationPermission())) return;
 
   await ensureAndroidChannel();
+  await ensureReminderActions();
   for (const reminder of changes.schedule) {
     await scheduleTaskReminder(reminder);
   }

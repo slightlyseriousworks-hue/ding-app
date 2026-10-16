@@ -1,5 +1,6 @@
 import {
   cancelReminder,
+  ensureReminderActions,
   getReminderTiming,
   getScheduledTaskReminders,
   hasNotificationPermission,
@@ -12,6 +13,7 @@ import type { Task } from '@/tasks/types';
 jest.mock('@/reminders/notifications', () => ({
   cancelReminder: jest.fn(async () => {}),
   ensureAndroidChannel: jest.fn(async () => {}),
+  ensureReminderActions: jest.fn(async () => {}),
   getReminderTiming: jest.fn(),
   getScheduledTaskReminders: jest.fn(),
   hasNotificationPermission: jest.fn(),
@@ -49,8 +51,8 @@ beforeEach(() => {
   mockedCancel.mockImplementation(async (id) => {
     device.delete(id);
   });
-  mockedSchedule.mockImplementation(async ({ id, dueAt, title, timing }) => {
-    device.set(id, { id, dueAt, title, timing });
+  mockedSchedule.mockImplementation(async ({ id, remindAt, title, timing }) => {
+    device.set(id, { id, remindAt, title, timing, hasActions: true });
   });
 });
 
@@ -60,6 +62,9 @@ it('schedules a reminder for a new future task', async () => {
 
   expect(mockedSchedule).toHaveBeenCalledTimes(1);
   expect([...device.keys()]).toEqual(['task-a']);
+  // The Done / Snooze buttons must exist before a reminder that uses them.
+  const actionsOrder = jest.mocked(ensureReminderActions).mock.invocationCallOrder[0];
+  expect(actionsOrder).toBeLessThan(mockedSchedule.mock.invocationCallOrder[0]);
 });
 
 it('syncing the same tasks twice schedules nothing extra', async () => {
@@ -94,7 +99,13 @@ it('cancels when a task is deleted', async () => {
 });
 
 it('does not cancel reminders of tasks it has never seen (corrupt-data recovery)', async () => {
-  device.set('task-lost', { id: 'task-lost', dueAt: task().dueAt, title: 'Lost', timing: 'exact' });
+  device.set('task-lost', {
+    id: 'task-lost',
+    remindAt: task().dueAt,
+    title: 'Lost',
+    timing: 'exact',
+    hasActions: true,
+  });
   const sync = createReminderSync();
   await sync([]);
 
@@ -105,9 +116,10 @@ it('does not cancel reminders of tasks it has never seen (corrupt-data recovery)
 it('schedules nothing without permission, but still cancels', async () => {
   device.set('task-a', {
     id: 'task-a',
-    dueAt: task().dueAt,
+    remindAt: task().dueAt,
     title: 'Water plants',
     timing: 'exact',
+    hasActions: true,
   });
   mockedHasPermission.mockResolvedValue(false);
   const sync = createReminderSync();

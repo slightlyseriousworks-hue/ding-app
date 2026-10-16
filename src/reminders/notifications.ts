@@ -2,6 +2,12 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
 import {
+  DONE_ACTION_ID,
+  REMINDER_CATEGORY_ID,
+  SNOOZE_ACTION_ID,
+  SNOOZE_MINUTES,
+} from '@/reminders/actions';
+import {
   REMINDER_ID_PREFIX,
   type ReminderTiming,
   type ReminderToSchedule,
@@ -51,6 +57,25 @@ export async function ensureAndroidChannel() {
     importance: Notifications.AndroidImportance.HIGH,
     vibrationPattern: [0, 250, 250, 250],
   });
+}
+
+/**
+ * Sets up the Done and Snooze buttons that task reminders show. Safe to call many times;
+ * the phone remembers them, so a reminder that rings while Ding is closed still has them.
+ *
+ * `opensAppToForeground: false` means pressing a button does NOT open Ding. On Android the
+ * press is handled by background-task.ts when Ding isn't on screen.
+ * Only verified on Android so far.
+ */
+export async function ensureReminderActions() {
+  await Notifications.setNotificationCategoryAsync(REMINDER_CATEGORY_ID, [
+    { identifier: DONE_ACTION_ID, buttonTitle: 'Done', options: { opensAppToForeground: false } },
+    {
+      identifier: SNOOZE_ACTION_ID,
+      buttonTitle: `Snooze ${SNOOZE_MINUTES} min`,
+      options: { opensAppToForeground: false },
+    },
+  ]);
 }
 
 /**
@@ -130,9 +155,11 @@ export async function getScheduledTaskReminders(): Promise<ScheduledReminder[]> 
     .filter((request) => request.identifier.startsWith(REMINDER_ID_PREFIX))
     .map((request) => ({
       id: request.identifier,
-      dueAt: readString(request.content.data?.dueAt),
+      // Reminders from before R3 only saved `dueAt`, which was also when they would ring.
+      remindAt: readString(request.content.data?.remindAt) ?? readString(request.content.data?.dueAt),
       title: readString(request.content.data?.title),
       timing: readTiming(request.content.data?.timing),
+      hasActions: request.content.categoryIdentifier === REMINDER_CATEGORY_ID,
     }));
 }
 
@@ -141,9 +168,10 @@ export async function cancelReminder(id: string) {
 }
 
 /**
- * Schedules one reminder at the task's due time. The due time, title, and timing are saved
- * inside the notification so sync can tell later whether it is still up to date.
- * Call ensureAndroidChannel() first.
+ * Schedules one reminder, with Done / Snooze buttons. The ring time, title, and timing are
+ * saved inside the notification so sync can tell later whether it is still up to date, and
+ * so a button press can tell whether it is for the task's current reminder.
+ * Call ensureAndroidChannel() and ensureReminderActions() first.
  */
 export async function scheduleTaskReminder(reminder: ReminderToSchedule) {
   await Notifications.scheduleNotificationAsync({
@@ -152,16 +180,17 @@ export async function scheduleTaskReminder(reminder: ReminderToSchedule) {
       title: reminder.title,
       body: 'Ding! This is due now.',
       sound: true,
+      categoryIdentifier: REMINDER_CATEGORY_ID,
       data: {
         taskId: reminder.taskId,
-        dueAt: reminder.dueAt,
+        remindAt: reminder.remindAt,
         title: reminder.title,
         timing: reminder.timing,
       },
     },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.DATE,
-      date: new Date(reminder.dueAt),
+      date: new Date(reminder.remindAt),
       channelId: REMINDERS_CHANNEL_ID,
     },
   });
