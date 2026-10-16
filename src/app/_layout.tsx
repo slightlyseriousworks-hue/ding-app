@@ -2,7 +2,11 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 
 import { HeaderLink } from '@/components/header-link';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { configureNotifications } from '@/reminders/notifications';
 import { TasksProvider } from '@/tasks/tasks-context';
+
+// Lets notifications show while the app is open. Does not ask for permission.
+configureNotifications();
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
