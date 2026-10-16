@@ -4,7 +4,11 @@ import { ScrollView, StyleSheet } from 'react-native';
 import { TaskForm } from '@/components/task-form';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { prepareReminder, showRemindersOffMessage } from '@/reminders/reminder-permission';
+import {
+  offerPreciseTiming,
+  prepareReminder,
+  showRemindersOffMessage,
+} from '@/reminders/reminder-permission';
 import { useTasks } from '@/tasks/tasks-context';
 
 export default function NewTaskScreen() {
@@ -28,6 +32,7 @@ export default function NewTaskScreen() {
           if (router.canGoBack()) router.back();
           else router.replace('/');
           if (!canRemind) showRemindersOffMessage();
+          else offerPreciseTiming(input.dueAt);
         }}
       />
     </ScrollView>

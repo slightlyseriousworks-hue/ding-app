@@ -7,7 +7,11 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { prepareReminder, showRemindersOffMessage } from '@/reminders/reminder-permission';
+import {
+  offerPreciseTiming,
+  prepareReminder,
+  showRemindersOffMessage,
+} from '@/reminders/reminder-permission';
 import { formatDue } from '@/tasks/dates';
 import { useTasks } from '@/tasks/tasks-context';
 import { confirm } from '@/utils/confirm';
@@ -74,6 +78,7 @@ export default function TaskDetailScreen() {
           updateTask(task.id, input);
           goBack();
           if (!canRemind) showRemindersOffMessage();
+          else if (!isDone) offerPreciseTiming(input.dueAt);
         }}
       />
 

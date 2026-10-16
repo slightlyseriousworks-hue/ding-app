@@ -1,7 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { CURRENT_VERSION } from '@/tasks/persisted-data';
-import { loadTasks, saveTasks } from '@/tasks/storage';
+import {
+  loadTasks,
+  markPreciseTimingOffered,
+  saveTasks,
+  wasPreciseTimingOffered,
+} from '@/tasks/storage';
 import type { Task } from '@/tasks/types';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
@@ -83,4 +88,12 @@ it('throws for data saved by a newer app version and leaves it alone', async () 
   await AsyncStorage.setItem(KEY, raw);
   await expect(loadTasks()).rejects.toThrow();
   expect(await AsyncStorage.getItem(KEY)).toBe(raw);
+});
+
+describe('precise timing offered flag', () => {
+  it('is false until it is marked', async () => {
+    await expect(wasPreciseTimingOffered()).resolves.toBe(false);
+    await markPreciseTimingOffered();
+    await expect(wasPreciseTimingOffered()).resolves.toBe(true);
+  });
 });

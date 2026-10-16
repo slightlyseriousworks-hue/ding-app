@@ -1,17 +1,59 @@
 import Constants from 'expo-constants';
-import { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { AppState, Platform, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import {
+  getReminderTiming,
+  openExactTimingSettings,
   requestNotificationPermission,
   scheduleTestNotification,
 } from '@/reminders/notifications';
 
 const TEST_DELAY_SECONDS = 10;
+
+/**
+ * Android only: shows whether reminders arrive on time, and offers to open Android Settings
+ * if they may be late. Re-checks whenever Ding comes back from the background (for example
+ * after the user flips the switch in Android Settings).
+ */
+function PreciseTimingCard() {
+  const theme = useTheme();
+  const [timing, setTiming] = useState(getReminderTiming);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') setTiming(getReminderTiming());
+    });
+    return () => subscription.remove();
+  }, []);
+
+  const isOn = timing === 'exact';
+  return (
+    <View style={[styles.card, styles.stackedCard, { backgroundColor: theme.backgroundElement }]}>
+      <View style={styles.row}>
+        <ThemedText>Precise timing</ThemedText>
+        <ThemedText themeColor="textSecondary">{isOn ? 'On' : 'Off'}</ThemedText>
+      </View>
+      {!isOn && (
+        <>
+          <ThemedText type="small" themeColor="textSecondary">
+            Reminders may arrive a few minutes late. Android needs Alarms & reminders access
+            for Ding to ring at the exact time.
+          </ThemedText>
+          <Button
+            label="Enable precise timing"
+            variant="secondary"
+            onPress={() => openExactTimingSettings()}
+          />
+        </>
+      )}
+    </View>
+  );
+}
 
 export default function SettingsScreen() {
   const theme = useTheme();
@@ -46,12 +88,13 @@ export default function SettingsScreen() {
         <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionTitle}>
           Reminders
         </ThemedText>
+        {Platform.OS === 'android' && <PreciseTimingCard />}
         <View style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
           <ThemedText themeColor="textSecondary">
             Snooze length and reminder intensity will live here once reminders are built.
           </ThemedText>
         </View>
-        <View style={[styles.card, styles.testCard, { backgroundColor: theme.backgroundElement }]}>
+        <View style={[styles.card, styles.stackedCard, { backgroundColor: theme.backgroundElement }]}>
           <Button
             label={`Send test notification (${TEST_DELAY_SECONDS}s)`}
             variant="secondary"
@@ -101,7 +144,7 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     borderRadius: Spacing.three,
   },
-  testCard: {
+  stackedCard: {
     gap: Spacing.two,
   },
   row: {

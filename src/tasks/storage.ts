@@ -1,5 +1,6 @@
 /**
- * The ONLY file that knows how tasks are saved on the device.
+ * The ONLY file that knows how tasks are saved on the device. (It also keeps one small
+ * app flag at the bottom, so this stays the only file that touches device storage.)
  *
  * Today this uses AsyncStorage (works on iOS, Android, and web) and stores the whole task
  * list as one JSON string. To move to SQLite later, rewrite these two functions and keep
@@ -50,4 +51,17 @@ export async function loadTasks(): Promise<Task[]> {
 
 export async function saveTasks(tasks: Task[]): Promise<void> {
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(toPersistedData(tasks)));
+}
+
+// --- App flags ---
+
+const PRECISE_TIMING_OFFERED_KEY = 'ding.preciseTimingOffered';
+
+/** True once Ding has explained "precise timing" to the user (it only does that once). */
+export async function wasPreciseTimingOffered(): Promise<boolean> {
+  return (await AsyncStorage.getItem(PRECISE_TIMING_OFFERED_KEY)) === 'true';
+}
+
+export async function markPreciseTimingOffered(): Promise<void> {
+  await AsyncStorage.setItem(PRECISE_TIMING_OFFERED_KEY, 'true');
 }
