@@ -9,6 +9,11 @@ jest.mock('@/tasks/storage', () => ({
   saveTasks: jest.fn(() => Promise.resolve()),
 }));
 
+const mockSyncReminders = jest.fn(() => Promise.resolve());
+jest.mock('@/reminders/sync', () => ({
+  createReminderSync: () => mockSyncReminders,
+}));
+
 const mockedLoadTasks = jest.mocked(loadTasks);
 const mockedSaveTasks = jest.mocked(saveTasks);
 
@@ -64,6 +69,29 @@ it('saves changes after a successful load', async () => {
   await screen.findByText('ready:1');
   await waitFor(() =>
     expect(mockedSaveTasks).toHaveBeenLastCalledWith([expect.objectContaining(newTask)])
+  );
+});
+
+it('never syncs reminders when loading fails', async () => {
+  mockedLoadTasks.mockRejectedValue(new Error('disk error'));
+  await renderProvider();
+
+  await screen.findByText('error:0');
+  await fireEvent.press(screen.getByText('Add'));
+
+  expect(mockSyncReminders).not.toHaveBeenCalled();
+});
+
+it('syncs reminders after loading and after every change', async () => {
+  mockedLoadTasks.mockResolvedValue([]);
+  await renderProvider();
+
+  await screen.findByText('ready:0');
+  await waitFor(() => expect(mockSyncReminders).toHaveBeenLastCalledWith([]));
+
+  await fireEvent.press(screen.getByText('Add'));
+  await waitFor(() =>
+    expect(mockSyncReminders).toHaveBeenLastCalledWith([expect.objectContaining(newTask)])
   );
 });
 

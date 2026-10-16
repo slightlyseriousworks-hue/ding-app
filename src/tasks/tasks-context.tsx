@@ -2,13 +2,15 @@
  * Shares the task list with every screen.
  *
  * Screens call `useTasks()` to read tasks and to add/edit/complete/delete them.
- * Every change is saved to the device automatically (see storage.ts).
+ * Every change is saved to the device automatically (see storage.ts), and task reminders
+ * are scheduled or cancelled to match (see reminders/sync.ts).
  *
  * Changes are only allowed (and only saved) once the saved list has loaded successfully.
  * If loading fails, we leave the device data alone so it can't be overwritten.
  */
 import { createContext, use, useCallback, useEffect, useState, type ReactNode } from 'react';
 
+import { createReminderSync } from '@/reminders/sync';
 import { loadTasks, saveTasks } from '@/tasks/storage';
 import type { Task, TaskInput } from '@/tasks/types';
 
@@ -62,6 +64,14 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     if (loadStatus !== 'ready') return;
     saveTasks(tasks).catch((error) => console.error('Failed to save tasks', error));
   }, [tasks, loadStatus]);
+
+  // Keep scheduled reminders matching the tasks. Same rule as saving: never before a
+  // successful load, or an empty list could cancel every reminder.
+  const [syncReminders] = useState(createReminderSync);
+  useEffect(() => {
+    if (loadStatus !== 'ready') return;
+    syncReminders(tasks);
+  }, [tasks, loadStatus, syncReminders]);
 
   /** Applies a change to the list, but only when it is safe to save it. */
   function change(update: (current: Task[]) => Task[]) {

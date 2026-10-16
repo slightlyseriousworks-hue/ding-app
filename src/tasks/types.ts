@@ -2,8 +2,9 @@
  * A single task. Dates are stored as ISO strings (e.g. "2026-10-15T15:00:00.000Z")
  * so they survive being saved as JSON.
  *
- * Reminder fields (snooze count, reminders sent, intensity, recurrence, notification ids)
- * will be added when the reminder system is built.
+ * A task's notification id is not stored: it is always `task-<id>` (see reminders/plan.ts).
+ * Other reminder fields (snooze count, reminders sent, intensity, recurrence) will be added
+ * when those features are built.
  */
 export type Task = {
   id: string;

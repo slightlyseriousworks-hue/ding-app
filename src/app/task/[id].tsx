@@ -7,6 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { prepareReminder, showRemindersOffMessage } from '@/reminders/reminder-permission';
 import { formatDue } from '@/tasks/dates';
 import { useTasks } from '@/tasks/tasks-context';
 import { confirm } from '@/utils/confirm';
@@ -67,9 +68,12 @@ export default function TaskDetailScreen() {
         key={task.id}
         initialValue={{ title: task.title, dueAt: task.dueAt }}
         submitLabel="Save changes"
-        onSubmit={(input) => {
+        onSubmit={async (input) => {
+          // Done tasks get no reminder, so there is nothing to ask about.
+          const canRemind = isDone || (await prepareReminder(input.dueAt));
           updateTask(task.id, input);
           goBack();
+          if (!canRemind) showRemindersOffMessage();
         }}
       />
 

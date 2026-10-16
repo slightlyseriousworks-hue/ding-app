@@ -4,6 +4,7 @@
  */
 
 import type { PermissionResult } from '@/reminders/notifications';
+import type { ReminderToSchedule, ScheduledReminder } from '@/reminders/plan';
 
 export type { PermissionResult };
 
@@ -20,3 +21,15 @@ export async function requestNotificationPermission(): Promise<PermissionResult>
 export async function scheduleTestNotification(_seconds: number): Promise<string | null> {
   return null;
 }
+
+export async function hasNotificationPermission() {
+  return false;
+}
+
+export async function getScheduledTaskReminders(): Promise<ScheduledReminder[]> {
+  return [];
+}
+
+export async function cancelReminder(_id: string) {}
+
+export async function scheduleTaskReminder(_reminder: ReminderToSchedule) {}

@@ -19,7 +19,8 @@ const TIME_STEP_MINUTES = 15;
 type TaskFormProps = {
   initialValue?: TaskInput;
   submitLabel: string;
-  onSubmit: (input: TaskInput) => void;
+  /** May be async; the button stays disabled until it finishes, so a task can't save twice. */
+  onSubmit: (input: TaskInput) => void | Promise<void>;
   autoFocus?: boolean;
 };
 
@@ -46,14 +47,25 @@ export function TaskForm({ initialValue, submitLabel, onSubmit, autoFocus }: Tas
 
   const [isBeforeEvening] = useState(() => new Date().getHours() < 18);
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  // A ref (not just state) so a fast double tap is blocked before the next render.
+  const isSubmittingRef = useRef(false);
+
   const trimmedTitle = title.trim();
 
-  function handleSubmit() {
-    if (!trimmedTitle) return;
+  async function handleSubmit() {
+    if (!trimmedTitle || isSubmittingRef.current) return;
     // Hide the keyboard right away instead of waiting for the screen to close.
     titleInputRef.current?.blur();
     Keyboard.dismiss();
-    onSubmit({ title: trimmedTitle, dueAt: due.toISOString() });
+    isSubmittingRef.current = true;
+    setIsSubmitting(true);
+    try {
+      await onSubmit({ title: trimmedTitle, dueAt: due.toISOString() });
+    } finally {
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
+    }
   }
 
   // Each preset works out its time when tapped, so it is never stale.
@@ -119,7 +131,7 @@ export function TaskForm({ initialValue, submitLabel, onSubmit, autoFocus }: Tas
         />
       </View>
 
-      <Button label={submitLabel} disabled={!trimmedTitle} onPress={handleSubmit} />
+      <Button label={submitLabel} disabled={!trimmedTitle || isSubmitting} onPress={handleSubmit} />
     </View>
   );
 }
