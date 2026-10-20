@@ -27,8 +27,17 @@ export const OPEN_ACTION_ID = 'open';
  */
 export const DIAG_OPEN_ACTION_ID = 'diag_open';
 
-/** How long Snooze waits. Development builds use 1 minute so it's quick to test by hand. */
-export const SNOOZE_MINUTES = __DEV__ ? 1 : 10;
+/**
+ * How long Snooze waits. Shorter outside production so it's quick to test by hand:
+ * development builds use 1 minute, and the EAS "preview" test APK uses 2 minutes.
+ * The preview build is a release build (`__DEV__` is false), so it is marked by
+ * EXPO_PUBLIC_DING_PREVIEW, which only the "preview" profile in eas.json sets.
+ */
+export const SNOOZE_MINUTES = __DEV__
+  ? 1
+  : process.env.EXPO_PUBLIC_DING_PREVIEW === '1'
+    ? 2
+    : 10;
 
 /** A press on a notification, as notifications.ts reports it. */
 export type ReminderPress = {
