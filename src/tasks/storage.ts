@@ -65,3 +65,36 @@ export async function wasPreciseTimingOffered(): Promise<boolean> {
 export async function markPreciseTimingOffered(): Promise<void> {
   await AsyncStorage.setItem(PRECISE_TIMING_OFFERED_KEY, 'true');
 }
+
+// --- DEV only: reminder action trace (see reminders/action-trace.ts) ---
+
+const ACTION_TRACE_KEY = 'ding.dev.actionTrace';
+/** Oldest lines are dropped past this, so the trace can't grow forever. */
+const ACTION_TRACE_MAX_LINES = 300;
+
+export async function loadActionTrace(): Promise<string[]> {
+  const raw = await AsyncStorage.getItem(ACTION_TRACE_KEY);
+  const lines: unknown = raw === null ? [] : JSON.parse(raw);
+  return Array.isArray(lines) ? lines.filter((line) => typeof line === 'string') : [];
+}
+
+export async function appendActionTrace(line: string): Promise<void> {
+  const lines = [...(await loadActionTrace()), line].slice(-ACTION_TRACE_MAX_LINES);
+  await AsyncStorage.setItem(ACTION_TRACE_KEY, JSON.stringify(lines));
+}
+
+export async function clearActionTrace(): Promise<void> {
+  await AsyncStorage.removeItem(ACTION_TRACE_KEY);
+}
+
+/**
+ * DEV only: the saved copy of one task, read straight from storage without the safety
+ * checks in loadTasks (and without making backups). Only used to describe it in the trace.
+ */
+export async function peekSavedTask(taskId: string): Promise<Task | string | null> {
+  const raw = await AsyncStorage.getItem(STORAGE_KEY);
+  if (raw === null) return null;
+  const result = parseStoredData(raw);
+  if (result.kind !== 'ok') return `unreadable (${result.kind})`;
+  return result.tasks.find((t) => t.id === taskId) ?? null;
+}

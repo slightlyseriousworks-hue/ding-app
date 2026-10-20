@@ -25,6 +25,7 @@ import { router } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { AppState, Platform } from 'react-native';
 
+import { describeTask, trace, traceSavedTask, type TraceSource } from '@/reminders/action-trace';
 import {
   applyReminderAction,
   readReminderPress,
@@ -37,8 +38,10 @@ import {
   dismissReminder,
   getLastReminderPress,
 } from '@/reminders/notifications';
+import { reminderTime } from '@/reminders/plan';
 import { createReminderSync } from '@/reminders/sync';
 import { loadTasks, saveTasks } from '@/tasks/storage';
+import type { Task } from '@/tasks/types';
 
 /** Presses handled in this run of the app (a safety net against exact repeats). */
 const handledKeys = new Set<string>();
@@ -50,10 +53,25 @@ function isNewPress(press: ReminderPress) {
   return true;
 }
 
-function dismiss(press: ReminderPress) {
-  dismissReminder(press.notificationId).catch((error) =>
-    console.error('Failed to dismiss reminder', error)
-  );
+function dismiss(press: ReminderPress, source: TraceSource) {
+  trace(source, `dismiss attempted: ${press.notificationId}`);
+  dismissReminder(press.notificationId)
+    .then(() => trace(source, 'dismiss succeeded'))
+    .catch((error) => {
+      trace(source, `dismiss failed: ${String(error)}`);
+      console.error('Failed to dismiss reminder', error);
+    });
+}
+
+/** DEV trace only: why applyReminderAction changed nothing (same rules as actions.ts). */
+function whyUnchanged(tasks: Task[], action: ReminderAction) {
+  const task = tasks.find((t) => t.id === action.taskId);
+  if (!task) return 'task not in saved list';
+  if (task.completedAt !== null) return 'task already completed';
+  if (action.kind === 'snooze' && action.remindAt !== reminderTime(task)) {
+    return `stale reminder: press remindAt=${action.remindAt} but task reminds at ${reminderTime(task)}`;
+  }
+  return 'unknown';
 }
 
 /** For tests: forget which presses were handled. */
@@ -67,25 +85,44 @@ export function resetHandledPresses() {
  */
 export async function handleBackgroundPress(press: ReminderPress) {
   const action = readReminderPress(press);
-  if (!action || action.kind === 'open') return;
-  if (!isNewPress(press)) return;
+  if (!action || action.kind === 'open') {
+    trace(
+      'bg-task',
+      `ignored: ${action ? 'tap on the notification itself' : 'not a task reminder button'} (action=${press.actionId})`
+    );
+    return;
+  }
+  if (!isNewPress(press)) {
+    trace('bg-task', `ignored: already handled in this run (key=${press.key})`);
+    return;
+  }
 
   try {
     // If reading fails, this throws and nothing is saved, so saved tasks can't be overwritten.
     const tasks = await loadTasks();
+    trace(
+      'bg-task',
+      `${action.kind} attempted on ${action.taskId}; saved before: ${describeTask(tasks.find((t) => t.id === action.taskId))}`
+    );
     const updated = applyReminderAction(tasks, action, new Date());
     if (updated) {
       await saveTasks(updated);
+      traceSavedTask('bg-task', 'saved after', action.taskId);
       // A fresh sync, as Ding would do on launch: cancels or (for Snooze) schedules the reminder.
+      trace('bg-task', 'sync called');
       await createReminderSync()(updated);
+      trace('bg-task', 'sync finished');
+    } else {
+      trace('bg-task', `no change, not saved, no sync: ${whyUnchanged(tasks, action)}`);
     }
   } catch (error) {
     // Leave the notification up so the user can press again.
     handledKeys.delete(press.key);
+    trace('bg-task', `failed, notification left up: ${String(error)}`);
     console.error('Failed to handle reminder press in the background', error);
     return;
   }
-  dismiss(press);
+  dismiss(press, 'bg-task');
 }
 
 /**
@@ -102,14 +139,33 @@ export function useReminderButtons(enabled: boolean, apply: (action: ReminderAct
     if (!enabled) return;
     return addReminderPressListener((press) => {
       const action = readReminderPress(press);
-      if (!action || action.kind === 'open') return;
+      if (!action || action.kind === 'open') {
+        trace(
+          'fg-buttons',
+          `ignored: ${action ? 'tap on the notification itself' : 'not a task reminder button'} (action=${press.actionId})`
+        );
+        return;
+      }
       // Not on screen: on Android the background task owns this press. (iOS has no such
       // task for button presses, so there the listener handles them. Not verified yet.)
-      if (Platform.OS === 'android' && AppState.currentState !== 'active') return;
-      if (!isNewPress(press)) return;
+      if (Platform.OS === 'android' && AppState.currentState !== 'active') {
+        trace(
+          'fg-buttons',
+          `ignored: Ding not active (AppState=${AppState.currentState}), background task should own it`
+        );
+        return;
+      }
+      if (!isNewPress(press)) {
+        trace('fg-buttons', `ignored: already handled in this run (key=${press.key})`);
+        return;
+      }
+      trace('fg-buttons', `${action.kind} attempted on ${action.taskId} via TasksProvider`);
+      traceSavedTask('fg-buttons', 'saved before', action.taskId);
       applyRef.current(action);
-      dismiss(press);
-    });
+      // The provider saves and syncs on its own a moment later; check what got saved.
+      traceSavedTask('fg-buttons', 'saved 2 s after', action.taskId, 2000);
+      dismiss(press, 'fg-buttons');
+    }, 'fg-buttons');
   }, [enabled]);
 }
 
@@ -118,17 +174,26 @@ export function useOpenTaskFromReminder() {
   useEffect(() => {
     function open(press: ReminderPress) {
       const action = readReminderPress(press);
-      if (action?.kind !== 'open' || !isNewPress(press)) return;
+      if (action?.kind !== 'open') return;
+      if (!isNewPress(press)) {
+        trace('fg-open', `ignored: already handled in this run (key=${press.key})`);
+        return;
+      }
+      trace('fg-open', `opening task ${action.taskId}`);
       router.push({ pathname: '/task/[id]', params: { id: action.taskId } });
     }
 
     // Ding was opened by tapping a notification (it may have been closed before).
     const last = getLastReminderPress();
     if (last) {
+      trace(
+        'fg-open',
+        `Ding opened by a press: action=${last.actionId} id=${last.notificationId} remindAt=${last.remindAt}`
+      );
       clearLastReminderPress();
       open(last);
     }
     // Ding was already running.
-    return addReminderPressListener(open);
+    return addReminderPressListener(open, 'fg-open');
   }, []);
 }

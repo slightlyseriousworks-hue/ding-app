@@ -10,6 +10,7 @@
  * Best effort: errors are logged, never thrown. The next change (or next launch) tries again.
  * On web the notification helpers do nothing, so this does nothing too.
  */
+import { trace } from '@/reminders/action-trace';
 import {
   cancelReminder,
   ensureAndroidChannel,
@@ -33,6 +34,11 @@ async function syncOnce(tasks: Task[], seenTaskIds: ReadonlySet<string>) {
   });
 
   // Cancel first, so an out-of-date reminder is gone before its replacement is scheduled.
+  if (changes.cancel.length > 0 || changes.schedule.length > 0) {
+    const scheduling = changes.schedule.map((r) => `${r.id}@${r.remindAt}`);
+    trace('sync', `cancel=[${changes.cancel.join(', ')}] schedule=[${scheduling.join(', ')}]`);
+  }
+
   for (const id of changes.cancel) {
     await cancelReminder(id);
   }

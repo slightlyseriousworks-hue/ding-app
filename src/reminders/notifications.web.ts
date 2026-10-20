@@ -3,6 +3,7 @@
  * so on web these do nothing. Expo picks this file automatically when running on web.
  */
 
+import type { TraceSource } from '@/reminders/action-trace';
 import type { ReminderPress } from '@/reminders/actions';
 import type { PermissionResult } from '@/reminders/notifications';
 import type { ReminderTiming, ReminderToSchedule, ScheduledReminder } from '@/reminders/plan';
@@ -49,7 +50,14 @@ export function toReminderPress(_response: unknown): ReminderPress | null {
   return null;
 }
 
-export function addReminderPressListener(_listener: (press: ReminderPress) => void) {
+export function describeResponse(_response: unknown) {
+  return '';
+}
+
+export function addReminderPressListener(
+  _listener: (press: ReminderPress) => void,
+  _traceSource?: TraceSource
+) {
   return () => {};
 }
 

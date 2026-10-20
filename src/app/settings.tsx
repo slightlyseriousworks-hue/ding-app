@@ -6,6 +6,7 @@ import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { printActionTrace, resetActionTrace } from '@/reminders/action-trace';
 import {
   getReminderTiming,
   openExactTimingSettings,
@@ -107,6 +108,21 @@ export default function SettingsScreen() {
             </ThemedText>
           )}
         </View>
+        {__DEV__ && (
+          // DEV only: prints the saved Done / Snooze trace to Metro (see reminders/action-trace.ts).
+          <View style={[styles.card, styles.stackedCard, { backgroundColor: theme.backgroundElement }]}>
+            <Button
+              label="Log action trace (DEV)"
+              variant="secondary"
+              onPress={() => printActionTrace().catch((error) => console.error(error))}
+            />
+            <Button
+              label="Clear action trace (DEV)"
+              variant="secondary"
+              onPress={() => resetActionTrace().catch((error) => console.error(error))}
+            />
+          </View>
+        )}
       </View>
 
       <View style={styles.section}>

@@ -10,6 +10,9 @@ import type { ScheduledReminder } from '@/reminders/plan';
 import { createReminderSync } from '@/reminders/sync';
 import type { Task } from '@/tasks/types';
 
+// The DEV action trace saves to device storage; keep it out of these tests.
+jest.mock('@/reminders/action-trace', () => ({ trace: jest.fn() }));
+
 jest.mock('@/reminders/notifications', () => ({
   cancelReminder: jest.fn(async () => {}),
   ensureAndroidChannel: jest.fn(async () => {}),

@@ -22,6 +22,9 @@ import {
 
 import { ExactAlarm } from '../../../modules/exact-alarm';
 
+// The DEV action trace saves to device storage; keep it out of these tests.
+jest.mock('@/reminders/action-trace', () => ({ trace: jest.fn() }));
+
 jest.mock('../../../modules/exact-alarm', () => ({
   ExactAlarm: {
     canScheduleExactAlarms: jest.fn(),
