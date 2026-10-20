@@ -35,14 +35,26 @@ export const REMINDERS_CHANNEL_ID = 'reminders';
  */
 export function configureNotifications() {
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowBanner: true,
-      shouldShowList: true,
-      // Must stay true: on Android, false also hides the drop-down (heads-up) banner.
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-    }),
+    handleNotification: async (notification) => {
+      if (__DEV__) logLateness(notification);
+      return {
+        shouldShowBanner: true,
+        shouldShowList: true,
+        // Must stay true: on Android, false also hides the drop-down (heads-up) banner.
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+      };
+    },
   });
+}
+
+/** DEV only: one log line saying how late a task reminder rang while Ding was open. */
+function logLateness(notification: Notifications.Notification) {
+  const id = notification.request.identifier;
+  const remindAt = readString(notification.request.content.data?.remindAt);
+  if (!id.startsWith(REMINDER_ID_PREFIX) || !remindAt) return;
+  const lateBySeconds = (notification.date - new Date(remindAt).getTime()) / 1000;
+  console.log(`[Ding timing] ${id} rang ${lateBySeconds.toFixed(1)} s after ${remindAt}`);
 }
 
 /**
