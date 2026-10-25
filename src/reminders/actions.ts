@@ -5,7 +5,9 @@
  * notifications.ts puts the buttons on reminders; reminder-responses.ts carries out presses.
  *
  * Rules:
- *   - Done completes the task. Pressing it again (or on an old notification) changes nothing.
+ *   - Done completes the task. Pressing it again on a task that is already completed changes
+ *     nothing. Unlike Snooze, it does not check `remindAt`: Done on an old notification
+ *     (e.g. the due time was edited since) still completes the task.
  *   - Snooze rings again SNOOZE_MINUTES from now. It only works on the task's CURRENT
  *     reminder: if the notification's `remindAt` no longer matches the task (already snoozed,
  *     due time edited, completed), the press changes nothing. So a repeated press can't
