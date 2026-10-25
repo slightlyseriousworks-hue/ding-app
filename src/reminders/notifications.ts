@@ -1,9 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
-import { trace, type TraceSource } from '@/reminders/action-trace';
 import {
-  DIAG_OPEN_ACTION_ID,
   DONE_ACTION_ID,
   OPEN_ACTION_ID,
   REMINDER_CATEGORY_ID,
@@ -84,43 +82,14 @@ export async function ensureAndroidChannel() {
  * Only verified on Android so far.
  */
 export async function ensureReminderActions() {
-  try {
-    const category = await Notifications.setNotificationCategoryAsync(REMINDER_CATEGORY_ID, [
-      { identifier: DONE_ACTION_ID, buttonTitle: 'Done', options: { opensAppToForeground: false } },
-      {
-        identifier: SNOOZE_ACTION_ID,
-        buttonTitle: `Snooze ${SNOOZE_MINUTES} min`,
-        options: { opensAppToForeground: false },
-      },
-      ...diagnosticActions(),
-    ]);
-    // DEV trace only. Records what the phone actually saved, not what Ding asked for.
-    // Written defensively so the trace itself can never make this function fail.
-    const actions = (category?.actions ?? [])
-      .map((a) => `${a.identifier}(opensApp=${a.options?.opensAppToForeground})`)
-      .join(', ');
-    trace('category', `registered "${category?.identifier}" actions=[${actions}]`);
-  } catch (error) {
-    trace('category', `registering "${REMINDER_CATEGORY_ID}" failed: ${String(error)}`);
-    throw error;
-  }
-}
-
-/**
- * DEV only (temporary A/B test): a third button, "DIAG OPEN", that opens Ding and changes
- * nothing. Done/Snooze are handled in the background; this one goes through the "open Ding"
- * route instead. If DIAG OPEN works after Ding was swiped away but Done/Snooze don't, the
- * background route is what fails. Off in release builds and in tests.
- */
-function diagnosticActions(): Notifications.NotificationAction[] {
-  if (!__DEV__ || process.env.NODE_ENV === 'test') return [];
-  return [
+  await Notifications.setNotificationCategoryAsync(REMINDER_CATEGORY_ID, [
+    { identifier: DONE_ACTION_ID, buttonTitle: 'Done', options: { opensAppToForeground: false } },
     {
-      identifier: DIAG_OPEN_ACTION_ID,
-      buttonTitle: 'DIAG OPEN',
-      options: { opensAppToForeground: true },
+      identifier: SNOOZE_ACTION_ID,
+      buttonTitle: `Snooze ${SNOOZE_MINUTES} min`,
+      options: { opensAppToForeground: false },
     },
-  ];
+  ]);
 }
 
 /**
@@ -280,34 +249,11 @@ export function toReminderPress(response: unknown): ReminderPress | null {
   };
 }
 
-/**
- * DEV trace only: the raw facts of a press (button id, notification id, and the taskId /
- * remindAt saved in the notification), before Ding interprets any of it.
- */
-export function describeResponse(response: unknown) {
-  const notification = readObject(readObject(response)?.notification);
-  const request = readObject(notification?.request);
-  const data = readData(readObject(request?.content));
-  return (
-    `actionIdentifier=${String(readObject(response)?.actionIdentifier)} ` +
-    `notificationId=${String(request?.identifier)} ` +
-    `taskId=${String(data?.taskId)} remindAt=${String(data?.remindAt)}`
-  );
-}
-
-/**
- * Calls `listener` for every press while Ding's JS is running. Returns an unsubscribe.
- * `traceSource` (DEV): also records every press this listener receives in the action trace.
- */
-export function addReminderPressListener(
-  listener: (press: ReminderPress) => void,
-  traceSource?: TraceSource
-) {
+/** Calls `listener` for every press while Ding's JS is running. Returns an unsubscribe. */
+export function addReminderPressListener(listener: (press: ReminderPress) => void) {
   const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-    if (traceSource) trace(traceSource, `response received: ${describeResponse(response)}`);
     const press = toReminderPress(response);
     if (press) listener(press);
-    else if (traceSource) trace(traceSource, 'ignored: response unreadable');
   });
   return () => subscription.remove();
 }

@@ -21,11 +21,6 @@ export const DONE_ACTION_ID = 'done';
 export const SNOOZE_ACTION_ID = 'snooze';
 /** Not a button: the user tapped the notification itself. */
 export const OPEN_ACTION_ID = 'open';
-/**
- * DEV diagnostic button only: opens Ding but changes nothing. Ding doesn't understand this id,
- * so every handler ignores it (and the action trace records that it arrived).
- */
-export const DIAG_OPEN_ACTION_ID = 'diag_open';
 
 /**
  * How long Snooze waits. Shorter outside production so it's quick to test by hand:
